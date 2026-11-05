@@ -8,6 +8,6 @@
     "node": ">=22.12.0"
   },
   "dependencies": {
-    "@flisk-sh/flisk": "flisk-sh/flisk"
+    "@flisk-sh/flisk": "^1.4.37"
   }
 }

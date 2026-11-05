@@ -10,6 +10,12 @@ Your job (Part 1 of the task): make it start with one `flisk up`.
    issues or pull requests here.
 2. In your copy, run `npx @flisk-sh/flisk import . --dry-run`, then the same
    without `--dry-run`, then `flisk up`. You need Docker running.
+
+   **On Windows:** this app runs as containers, so `flisk up` needs Ubuntu on
+   WSL2, not PowerShell. Do every step inside Ubuntu: clone your fork into the
+   Ubuntu home folder (`~/`, not `/mnt/c` or `D:\`), turn on Docker Desktop's
+   WSL integration for Ubuntu, and install Node.js 22.12+ and Tilt in Ubuntu.
+   Guide: https://github.com/flisk-sh/flisk/blob/main/docs/start-here-on-windows.md
 3. Replace this README with yours: how to start it with `flisk up`, and what
    was hard.
 

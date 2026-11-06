@@ -1,0 +1,37 @@
+{
+  "$schema": "https://flisk.sh/schema.service.json",
+  "schemaVersion": 1,
+  "appName": "db",
+  "appType": "bring-your-own",
+  "stack": "flisk-task-starter-main",
+  "port": 4000,
+  "healthCheck": {
+    "command": [
+      "sh",
+      "-c",
+      "/healthchecks/postgres.sh"
+    ],
+    "interval": 5
+  },
+  "image": "postgres:15-alpine",
+  "exposeViaProxy": false,
+  "env": {
+    "POSTGRES_USER": "postgres"
+  },
+  "secrets": {
+    "required": [
+      "POSTGRES_PASSWORD"
+    ]
+  },
+  "volumes": [
+    {
+      "source": "db-data",
+      "target": "/var/lib/postgresql/data",
+      "name": "flisk-task-starter-main_db-data"
+    },
+    {
+      "source": "../../../healthchecks",
+      "target": "/healthchecks"
+    }
+  ]
+}

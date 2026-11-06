@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "data": {
+    "services": [
+      {
+        "name": "result",
+        "stack": "flisk-task-starter-main",
+        "basePath": "/api/result",
+        "url": "http://api.flisk-task-starter-main.localhost:80/api/result/",
+        "port": 80,
+        "status": "running"
+      },
+      {
+        "name": "vote",
+        "stack": "flisk-task-starter-main",
+        "basePath": "/api/vote",
+        "url": "http://api.flisk-task-starter-main.localhost:80/api/vote/",
+        "port": 80,
+        "status": "running"
+      }
+    ]
+  },
+  "errors": []
+}

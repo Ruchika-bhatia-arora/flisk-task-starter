@@ -71,6 +71,13 @@ app.get('/', function (req, res) {
   res.sendFile(path.resolve(__dirname + '/views/index.html'));
 });
 
+app.get('/options', function (req, res) {
+  res.json({
+    a: process.env.OPTION_A || 'Cats',
+    b: process.env.OPTION_B || 'Dogs'
+  });
+});
+
 server.listen(port, function () {
   var port = server.address().port;
   console.log('App running on port ' + port);

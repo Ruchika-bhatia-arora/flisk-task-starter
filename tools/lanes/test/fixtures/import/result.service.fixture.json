@@ -1,0 +1,39 @@
+{
+  "$schema": "https://flisk.sh/schema.service.json",
+  "schemaVersion": 1,
+  "appName": "result",
+  "appType": "bring-your-own",
+  "stack": "flisk-task-starter-main",
+  "port": 80,
+  "healthCheckPath": "/",
+  "buildContext": "../../../result",
+  "dockerfile": "Dockerfile",
+  "dependsOn": [
+    {
+      "name": "db",
+      "condition": "service_healthy"
+    }
+  ],
+  "container": {
+    "entrypoint": [
+      "nodemon",
+      "--inspect=0.0.0.0",
+      "server.js"
+    ]
+  },
+  "extraPorts": [
+    {
+      "port": 80,
+      "publish": "8081"
+    },
+    {
+      "port": 9229
+    }
+  ],
+  "volumes": [
+    {
+      "source": "../../../result",
+      "target": "/usr/local/app"
+    }
+  ]
+}

@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Lanes</title>
+<style>
+  :root {
+    --panel: #c5cec0;
+    --panel-deep: #b3bdad;
+    --ink: #1e3b3f;
+    --ink-soft: #4d6466;
+    --green: #2f9d5d;
+    --amber: #d99a00;
+    --red: #c23b2e;
+    --unlit: #8e998c;
+    --paper: #eef1ea;
+    --face: "DIN Alternate", "Barlow", "Bahnschrift", "Roboto Condensed", system-ui, sans-serif;
+    --face-narrow: "DIN Condensed", "Barlow Condensed", "Bahnschrift Condensed", "Roboto Condensed", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--panel); color: var(--ink); }
+  body {
+    margin: 0;
+    font: 16px/1.45 var(--face);
+    font-variant-numeric: tabular-nums;
+    min-height: 100vh;
+    background: var(--panel);
+  }
+  main { max-width: 1180px; margin: 0 auto; padding: 40px 28px 64px; }
+
+  header.board { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 24px; margin-bottom: 36px; }
+  h1 {
+    font: 400 64px/0.9 var(--face-narrow);
+    letter-spacing: 0.01em;
+    margin: 0;
+  }
+  .summary { margin: 10px 0 0; color: var(--ink-soft); max-width: 60ch; }
+  .clock { font: 400 28px/1 var(--face-narrow); color: var(--ink-soft); text-align: right; }
+  .clock small { display: block; font: 13px/1.3 var(--face); margin-top: 6px; }
+  .conn-lost { color: var(--red); }
+
+  /* One lane = one track. */
+  .lane {
+    display: grid;
+    grid-template-columns: 190px 1fr 230px;
+    gap: 22px;
+    align-items: center;
+    padding: 22px 0 20px;
+    border-top: 3px solid var(--ink);
+  }
+  .lane:last-of-type { border-bottom: 3px solid var(--ink); }
+  .plate h2 { font: 400 40px/0.95 var(--face-narrow); margin: 0; }
+  .plate .question { margin: 4px 0 0; font-size: 15px; }
+  .plate .state { margin: 10px 0 0; font-size: 14px; color: var(--ink-soft); }
+  .plate .state strong { color: var(--ink); font-weight: 400; }
+  .lane-controls { display: flex; gap: 8px; margin-top: 12px; }
+  .lane-controls button { padding: 6px 10px; font-size: 14px; }
+
+  .track { position: relative; padding: 8px 0 0; }
+  .rail {
+    position: absolute; left: 14px; right: 14px; top: 23px; height: 6px;
+    background: var(--ink); border-radius: 3px; overflow: hidden;
+  }
+  .lane[data-state="stopped"] .rail { background: var(--unlit); }
+  .pulse {
+    position: absolute; top: 0; left: -18%; width: 18%; height: 100%;
+    background: linear-gradient(90deg, transparent, #f4f7ef, transparent);
+    opacity: 0;
+  }
+  .lane.firing .pulse { animation: run 1.4s ease-in-out; }
+  @keyframes run { 0% { left: -18%; opacity: 1; } 100% { left: 100%; opacity: 1; } }
+
+  .stations { position: relative; display: flex; justify-content: space-between; list-style: none; margin: 0; padding: 0; }
+  .station { display: grid; justify-items: center; gap: 8px; min-width: 64px; }
+  .lamp {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--unlit);
+    border: 4px solid var(--ink);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.18);
+  }
+  .lamp[data-status="ready"] { background: var(--green); box-shadow: 0 0 0 4px rgba(47, 157, 93, 0.25), inset 0 -3px 0 rgba(0,0,0,.18); }
+  .lamp[data-status="pending"] { background: var(--amber); animation: blink 1s steps(2, jump-none) infinite; }
+  .lamp[data-status="error"] { background: var(--red); }
+  @keyframes blink { 50% { background: var(--unlit); } }
+  .station span { font-size: 14px; }
+  .links { margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+  .links a { color: var(--ink); text-underline-offset: 3px; }
+  .links .ports { color: var(--ink-soft); }
+  .error { margin: 12px 0 0; padding: 10px 12px; background: var(--paper); border-left: 4px solid var(--red); font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  .tally { display: grid; gap: 8px; }
+  .score { display: grid; grid-template-columns: 1fr auto; align-items: baseline; font-size: 15px; }
+  .score b { font: 400 30px/1 var(--face-narrow); }
+  .bar { height: 8px; background: var(--paper); border: 2px solid var(--ink); display: flex; }
+  .bar i { display: block; background: var(--ink); transition: width 0.5s ease; }
+  .delta { font-size: 14px; min-height: 1.4em; color: var(--ink-soft); }
+  .delta.moved { color: var(--green); }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+  button, input {
+    font: 15px/1 var(--face);
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    background: var(--paper);
+    padding: 9px 12px;
+    border-radius: 2px;
+  }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: #fff; }
+  button.primary { background: var(--ink); color: var(--paper); }
+  button.primary:hover:not(:disabled) { background: #2b5357; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+  .siding {
+    margin-top: 34px; padding: 22px 0; border-top: 3px dashed var(--ink-soft);
+    display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: start;
+  }
+  .siding h2 { font: 400 32px/1 var(--face-narrow); margin: 0; }
+  .siding form { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .siding label { display: grid; gap: 6px; font-size: 14px; }
+  .siding input { width: 150px; }
+  .hint { flex-basis: 100%; margin: 4px 0 0; font-size: 14px; color: var(--ink-soft); }
+  .empty { padding: 30px 0; border-top: 3px solid var(--ink); border-bottom: 3px solid var(--ink); font-size: 18px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 12px 18px; font-size: 15px; max-width: min(92vw, 640px); }
+  .toast[hidden] { display: none; }
+
+  @media (max-width: 900px) {
+    .lane, .siding { grid-template-columns: 1fr; }
+    .station { min-width: 0; }
+    .rail { left: 10px; right: 10px; }
+    header.board { grid-template-columns: 1fr; }
+    .clock { text-align: left; }
+    h1 { font-size: 48px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lamp[data-status="pending"] { animation: none; background: var(--amber); }
+    .lane.firing .pulse { animation: none; }
+    .bar i { transition: none; }
+  }
+
+  /* Lane Arena */
+  .arena { margin: 0 0 44px; }
+  .arena-head { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 16px; border-bottom: 3px solid var(--ink); padding-bottom: 14px; }
+  .arena-head h2 { font: 400 44px/0.95 var(--face-narrow); margin: 0; }
+  .arena-head p { margin: 6px 0 0; color: var(--ink-soft); max-width: 70ch; }
+  .race-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin: 18px 0 12px; }
+  .race-task { display: grid; gap: 4px; padding: 12px 14px; border: 2px solid var(--ink); background: var(--paper); cursor: pointer; }
+  .race-task input { position: absolute; opacity: 0; pointer-events: none; }
+  .race-task:has(input:checked) { background: var(--ink); color: var(--paper); }
+  .race-task:has(input:focus-visible) { outline: 3px solid var(--amber); outline-offset: 2px; }
+  .race-task strong { font: 400 22px/1.05 var(--face-narrow); }
+  .race-task small { font-size: 13px; opacity: 0.85; }
+  .race-task .difficulty { font-size: 13px; }
+  .race-go { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .race-go input[type="text"] { flex: 1 1 320px; }
+  .race-go .note { font-size: 14px; color: var(--ink-soft); }
+  .contestant { display: grid; grid-template-columns: 190px 1fr 300px; gap: 22px; align-items: center; padding: 18px 0; border-bottom: 2px solid var(--ink); }
+  .contestant h3 { font: 400 34px/0.95 var(--face-narrow); margin: 0; }
+  .contestant .model { margin: 4px 0 0; font-size: 14px; color: var(--ink-soft); }
+  .contestant .verdict { font: 400 24px/1 var(--face-narrow); }
+  .contestant .verdict[data-status="passed"] { color: var(--green); }
+  .contestant .verdict[data-status="failed"], .contestant .verdict[data-status="lane_failed"], .contestant .verdict[data-status="agent_error"], .contestant .verdict[data-status="over_budget"] { color: var(--red); }
+  .contestant .facts { font-size: 14px; margin: 6px 0 8px; }
+  .contestant .why { font-size: 13px; color: var(--ink-soft); margin: 0 0 8px; overflow-wrap: anywhere; }
+  .rank { display: inline-block; min-width: 1.6em; font: 400 34px/1 var(--face-narrow); }
+  .stage-lamps .station span { font-size: 13px; }
+  dialog.diff { width: min(960px, 94vw); max-height: 86vh; border: 3px solid var(--ink); background: var(--paper); color: var(--ink); padding: 0; }
+  dialog.diff header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-bottom: 2px solid var(--ink); }
+  dialog.diff pre { margin: 0; padding: 14px 16px; max-height: 70vh; overflow: auto; font: 13px/1.45 ui-monospace, Menlo, monospace; }
+  dialog.diff .add { color: #1d6b3c; background: #e1efe2; display: block; }
+  dialog.diff .del { color: #8a2a20; background: #f4e2df; display: block; }
+  dialog.diff .meta { color: var(--ink-soft); display: block; }
+  @media (max-width: 900px) { .race-form, .contestant { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <header class="board">
+    <div>
+      <h1>Agent Lanes</h1>
+      <p class="summary" id="summary">Connecting to the lanes…</p>
+    </div>
+    <div class="clock" id="clock">--:--:--<small>waiting for the first report</small></div>
+  </header>
+
+  <section class="arena" aria-labelledby="arena-title">
+    <div class="arena-head">
+      <div>
+        <h2 id="arena-title">Lane Arena</h2>
+        <p>Give one change to Haiku, Sonnet and Opus at once. Each works in its own running lane, and its result is checked against its live app.</p>
+      </div>
+    </div>
+    <form id="race">
+      <div class="race-form" id="race-tasks"></div>
+      <div class="race-go">
+        <input type="text" name="freeText" placeholder="Or describe any change (raced without checks)" maxlength="400">
+        <button class="primary" type="submit" id="race-start">Start race</button>
+        <span class="note">Each agent is capped at $1 ($2 on the hardest task), so a race costs a few dollars at most.</span>
+      </div>
+    </form>
+    <div id="contestants" aria-live="polite"></div>
+  </section>
+
+  <section id="lanes" aria-live="polite"></section>
+
+  <section class="siding" aria-labelledby="add-title">
+    <h2 id="add-title">Add a lane</h2>
+    <form id="add">
+      <label>Name <input name="name" placeholder="auto" pattern="[a-z][a-z0-9]{0,11}" autocomplete="off"></label>
+      <label>Option A <input name="a" placeholder="auto" maxlength="24"></label>
+      <label>Option B <input name="b" placeholder="auto" maxlength="24"></label>
+      <button class="primary" type="submit">Add and start lane</button>
+      <p class="hint">Each lane is a full copy of the voting app with its own Flisk project, ports and database. The first start builds images and takes about two minutes.</p>
+    </form>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+<dialog class="diff" id="diff"><header><strong id="diff-title"></strong><button type="button" id="diff-close">Close</button></header><pre id="diff-body"></pre></dialog>
+
+<script>
+  // Data flows vote → redis → worker → db → result: the track follows it.
+  const STATIONS = ["vote", "redis", "worker", "db", "result"];
+  const lanesEl = document.getElementById("lanes");
+  const rows = new Map();
+  const counts = new Map();
+  const busy = new Set();
+  let lastLanes = [];
+  let allLaneViews = [];
+
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+
+  function toast(message) {
+    const el = document.getElementById("toast");
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => (el.hidden = true), 5000);
+  }
+
+  async function call(method, path, body) {
+    const res = await fetch(path, { method, headers: { "content-type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error?.message ?? `${method} ${path} answered ${res.status}`);
+    return data;
+  }
+
+  function stateText(lane) {
+    if (lane.activity === "starting") return "Starting: building and booting the stack";
+    if (lane.activity === "stopping") return "Stopping";
+    if (lane.activity === "destroying") return "Removing the stack and its data";
+    return { stopped: "Stopped", starting: "Booting", running: "Running", failed: "A service failed" }[lane.state];
+  }
+
+  function rowFor(lane) {
+    let row = rows.get(lane.name);
+    if (row) return row;
+    row = document.createElement("article");
+    row.className = "lane";
+    row.innerHTML = `
+      <div class="plate">
+        <h2>${esc(lane.name)}</h2>
+        <p class="question">${esc(lane.pair.a)} or ${esc(lane.pair.b)}?</p>
+        <p class="state"></p>
+        <div class="lane-controls">
+          <button data-act="toggle"></button>
+          <button data-act="remove">Remove</button>
+        </div>
+      </div>
+      <div class="track">
+        <div class="rail"><div class="pulse"></div></div>
+        <ol class="stations">${STATIONS.map((s) => `<li class="station"><div class="lamp" data-station="${s}" role="img"></div><span>${s}</span></li>`).join("")}</ol>
+        <p class="links">
+          <a data-link="vote" target="_blank" rel="noopener">Vote page</a>
+          <a data-link="result" target="_blank" rel="noopener">Results page</a>
+          <a data-link="tilt" target="_blank" rel="noopener">Tilt</a>
+          <span class="ports"></span>
+        </p>
+        <div class="error" hidden></div>
+      </div>
+      <div class="tally">
+        <div class="score"><span>${esc(lane.pair.a)}</span><b data-count="a">–</b></div>
+        <div class="score"><span>${esc(lane.pair.b)}</span><b data-count="b">–</b></div>
+        <div class="bar" aria-hidden="true"><i data-bar="a"></i></div>
+        <div class="delta" aria-live="polite"></div>
+        <div class="actions">
+          <button class="primary" data-act="votes-a">Cast 10 for ${esc(lane.pair.a)}</button>
+          <button data-act="votes-b">Cast 10 for ${esc(lane.pair.b)}</button>
+        </div>
+      </div>`;
+    row.addEventListener("click", (event) => {
+      const act = event.target.closest("button")?.dataset.act;
+      if (act) act.startsWith("votes") ? castVotes(lane.name, act.slice(-1)) : laneAction(lane.name, act);
+    });
+    rows.set(lane.name, row);
+    return row;
+  }
+
+  function update(lane) {
+    const row = rowFor(lane);
+    row.dataset.state = lane.state;
+    row.querySelector(".state").innerHTML = `<strong>${esc(stateText(lane))}</strong>`;
+    const byName = new Map(lane.services.map((s) => [s.name, s.status]));
+    for (const lamp of row.querySelectorAll(".lamp")) {
+      const reported = lane.state === "stopped" ? "off" : (byName.get(lamp.dataset.station) ?? "off");
+      // While Flisk boots a lane, Tilt may not answer yet: show the whole track as starting, not as dark.
+      const status = lane.activity === "starting" && reported !== "ready" && reported !== "error" ? "pending" : reported;
+      lamp.dataset.status = status;
+      lamp.setAttribute("aria-label", `${lamp.dataset.station}: ${status === "off" ? "not running" : status}`);
+    }
+    for (const a of row.querySelectorAll("[data-link]")) a.href = lane.urls[a.dataset.link];
+    row.querySelector(".ports").textContent = `HTTP ${lane.ports.http}, Tilt ${lane.ports.tilt}, project ${lane.projectName}`;
+    const err = row.querySelector(".error");
+    err.hidden = !lane.lastError;
+    err.textContent = lane.lastError ? `Last error: ${lane.lastError}` : "";
+    const running = lane.state === "running" && !lane.activity;
+    const working = Boolean(lane.activity) || busy.has(lane.name);
+    row.querySelector('[data-act="votes-a"]').disabled = !running || working;
+    row.querySelector('[data-act="votes-b"]').disabled = !running || working;
+    const toggle = row.querySelector('[data-act="toggle"]');
+    toggle.textContent = lane.state === "stopped" && lane.activity !== "starting" ? "Start" : "Stop";
+    toggle.disabled = working;
+    row.querySelector('[data-act="remove"]').disabled = working;
+    if (running && !counts.has(lane.name)) refreshCounts(lane.name);
+    paintCounts(lane.name);
+  }
+
+  function paintCounts(name, deltaText, moved) {
+    const row = rows.get(name);
+    const c = counts.get(name);
+    if (!row) return;
+    row.querySelector('[data-count="a"]').textContent = c ? c.a : "–";
+    row.querySelector('[data-count="b"]').textContent = c ? c.b : "–";
+    const total = c ? c.a + c.b : 0;
+    row.querySelector('[data-bar="a"]').style.width = total ? `${(100 * c.a) / total}%` : "0";
+    if (deltaText !== undefined) {
+      const d = row.querySelector(".delta");
+      d.textContent = deltaText;
+      d.classList.toggle("moved", Boolean(moved));
+    }
+  }
+
+  async function refreshCounts(name) {
+    try {
+      counts.set(name, (await call("GET", `/api/lanes/${name}/counts`)).counts);
+      paintCounts(name);
+    } catch { /* the lane may still be booting */ }
+  }
+
+  function render(allLanes) {
+    allLaneViews = allLanes;
+    const lanes = allLanes.filter((l) => !l.arena);
+    lastLanes = lanes;
+    for (const [name, row] of rows) {
+      if (!lanes.some((l) => l.name === name)) { row.remove(); rows.delete(name); counts.delete(name); }
+    }
+    if (lanes.length === 0) {
+      lanesEl.innerHTML = `<p class="empty">No lanes yet. Add one below to run a second, fully separate copy of the voting app.</p>`;
+    } else {
+      lanesEl.querySelector(".empty")?.remove();
+      for (const lane of lanes) {
+        const row = rowFor(lane);
+        if (!row.isConnected) lanesEl.append(row);
+        update(lane);
+      }
+    }
+    const running = lanes.filter((l) => l.state === "running").length;
+    document.getElementById("summary").textContent = lanes.length
+      ? `${running} of ${lanes.length} lanes running. Each one is its own Flisk project with separate containers, ports and Postgres data.`
+      : "Run several isolated copies of the voting app side by side, as parallel coding agents would.";
+  }
+
+  async function castVotes(name, choice) {
+    busy.add(name);
+    render(lastLanes);
+    const before = new Map([...counts].map(([k, v]) => [k, { ...v }]));
+    const row = rows.get(name);
+    row.classList.remove("firing");
+    void row.offsetWidth;
+    row.classList.add("firing");
+    try {
+      const result = await call("POST", `/api/lanes/${name}/votes`, { count: 10, choice });
+      counts.set(name, result.counts);
+      const was = before.get(name) ?? { a: 0, b: 0 };
+      const gained = result.counts.a + result.counts.b - was.a - was.b;
+      paintCounts(name, `+${gained} stored in ${name}'s own database`, true);
+      // The proof: every other lane is re-read and should not have moved.
+      for (const other of lastLanes.filter((l) => l.name !== name && l.state === "running")) {
+        await refreshCounts(other.name);
+        const now = counts.get(other.name), then = before.get(other.name);
+        const same = then && now && now.a === then.a && now.b === then.b;
+        paintCounts(other.name, same ? `Unchanged while ${name} voted` : `Changed while ${name} voted: not isolated`, false);
+      }
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      busy.delete(name);
+      render(lastLanes);
+    }
+  }
+
+  async function laneAction(name, act) {
+    const lane = lastLanes.find((l) => l.name === name);
+    try {
+      if (act === "remove") {
+        if (!confirm(`Remove lane ${name}? This stops its stack and deletes its folder and database.`)) return;
+        await call("DELETE", `/api/lanes/${name}`);
+        toast(`Removing ${name}`);
+      } else if (lane?.state === "stopped") {
+        await call("POST", `/api/lanes/${name}/start`);
+        toast(`Starting ${name}`);
+      } else {
+        await call("POST", `/api/lanes/${name}/stop`);
+        toast(`Stopping ${name}`);
+      }
+    } catch (error) { toast(error.message); }
+  }
+
+  document.getElementById("add").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const name = form.get("name").trim();
+    const a = form.get("a").trim(), b = form.get("b").trim();
+    if ((a && !b) || (!a && b)) return toast("Give both options, or leave both empty for an automatic pair.");
+    const button = event.target.querySelector("button");
+    button.disabled = true;
+    try {
+      const { lane } = await call("POST", "/api/lanes", { name: name || undefined, pair: a ? { a, b } : undefined });
+      toast(`Added ${lane.name}: ${lane.pair.a} or ${lane.pair.b}. Starting it now.`);
+      event.target.reset();
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  });
+
+
+  // ---------- Lane Arena ----------
+  const STAGES = [["lane", "lane"], ["agent", "agent"], ["restart", "restart"], ["checks", "checks"]];
+  const STATUS_TEXT = { passed: "Passed", failed: "Failed checks", over_budget: "Over budget", agent_error: "Agent error", lane_failed: "Lane did not start", unverified: "Unverified" };
+  let currentRun = null;
+  let tasks = [];
+
+  async function loadTasks() {
+    tasks = (await call("GET", "/api/arena/tasks")).tasks;
+    document.getElementById("race-tasks").innerHTML = tasks.map((t, i) => `
+      <label class="race-task">
+        <input type="radio" name="taskId" value="${esc(t.id)}" ${i === 0 ? "checked" : ""}>
+        <span class="difficulty">${esc(t.difficulty)}</span>
+        <strong>${esc(t.title)}</strong>
+        <small>${esc(t.summary)}</small>
+      </label>`).join("");
+  }
+
+  function stageStatus(c, key) {
+    const order = STAGES.map(([k]) => k);
+    if (c.status === "lane_failed") return key === "lane" ? "error" : "off";
+    if (c.stage === "done") {
+      if (key === "checks") return c.status === "passed" || c.status === "unverified" ? "ready" : "error";
+      return "ready";
+    }
+    const at = order.indexOf(c.stage), me = order.indexOf(key);
+    if (at === -1) return "off";
+    return me < at ? "ready" : me === at ? "pending" : "off";
+  }
+
+  function renderArena(run) {
+    currentRun = run;
+    const box = document.getElementById("contestants");
+    const running = Boolean(run && !run.finishedAt);
+    document.getElementById("race-start").disabled = running;
+    if (!run) { box.innerHTML = `<p class="summary">No race yet. Pick a task and start one.</p>`; return; }
+    const lanesByName = new Map(allLaneViews.map((l) => [l.name, l]));
+    const ordered = run.finishedAt ? [...run.contestants].sort((a, b) => (a.rank ?? 9) - (b.rank ?? 9)) : run.contestants;
+    const paused = run.paused?.length ? ` ${run.paused.join(" and ")} ${running ? "are paused to make room and come back after the race" : "were paused for the race and started again"}.` : "";
+    const notes = (run.notes ?? []).map((n) => `<p class="why">${esc(n)}</p>`).join("");
+    const b = run.baseline;
+    const proof = !b ? "" : b.error ? " The control lane with the original code did not start." : b.checks ? ` Original code: ${b.passed} of ${b.total} checks${b.passed < b.total ? ", so the checks fail without the change." : "."}` : " Checking the original code on a control lane.";
+    box.innerHTML = `<p class="summary">${running ? "Racing" : "Finished"}: ${esc(run.task.title)}${run.task.unverified ? " (unverified)" : ""}. Race ${esc(run.id)}.${esc(paused)}${esc(proof)}</p>${notes}` +
+      ordered.map((c) => {
+        const lane = lanesByName.get(c.lane);
+        const passedChecks = c.checks ? c.checks.filter((k) => k.passed).length : 0;
+        const failed = (c.checks ?? []).filter((k) => !k.passed);
+        const facts = c.agent
+          ? `${c.checks ? `${passedChecks} of ${c.checks.length} checks` : "no checks"}. ${c.agent.costUsd < 0.1 ? "$" + c.agent.costUsd.toFixed(4) : "$" + c.agent.costUsd.toFixed(2)}, ${Math.round(c.agent.durationMs / 1000)} s, ${c.agent.turns} turns${c.diff ? `, +${c.diff.added} −${c.diff.removed} lines in ${c.diff.files.length} files` : ""}.`
+          : "";
+        const why = c.error ? c.error.split("\n")[0] : failed[0] ? `${failed[0].label}: ${failed[0].detail}` : c.agent?.summary ? c.agent.summary.slice(0, 220) : "";
+        const canApply = run.finishedAt && (c.status === "passed" || c.status === "unverified");
+        return `
+        <article class="contestant">
+          <div>
+            <h3>${run.finishedAt && c.rank ? `<span class="rank">${c.rank}</span>` : ""}${esc(c.model)}</h3>
+            <p class="model">${esc(c.modelId)}</p>
+          </div>
+          <div class="track stage-lamps">
+            <div class="rail"><div class="pulse"></div></div>
+            <ol class="stations">${STAGES.map(([k, label]) => `<li class="station"><div class="lamp" data-status="${stageStatus(c, k)}" role="img" aria-label="${label}: ${stageStatus(c, k)}"></div><span>${label}</span></li>`).join("")}</ol>
+            ${lane && lane.state === "running" ? `<p class="links"><a href="${lane.urls.vote}" target="_blank" rel="noopener">Vote page</a><a href="${lane.urls.result}" target="_blank" rel="noopener">Results page</a></p>` : ""}
+          </div>
+          <div>
+            <div class="verdict" data-status="${esc(c.status ?? "")}">${esc(c.status ? STATUS_TEXT[c.status] : `Working: ${c.stage}`)}</div>
+            <p class="facts">${esc(facts)}</p>
+            ${why ? `<p class="why">${esc(why)}</p>` : ""}
+            ${c.agent?.deniedTools?.length ? `<p class="why">Refused: ${esc(c.agent.deniedTools.join("; ").slice(0, 200))}</p>` : ""}
+            <div class="actions">
+              ${c.diff ? `<button data-diff="${esc(c.model)}">View diff</button>` : ""}
+              ${canApply ? `<button class="primary" data-apply="${esc(c.model)}">Apply to base</button>` : ""}
+              ${run.finishedAt && lane && lane.state === "stopped" && !lane.activity && c.status !== "lane_failed" ? `<button data-start-lane="${esc(c.model)}">Start lane to try it</button>` : ""}
+            </div>
+          </div>
+        </article>`;
+      }).join("");
+  }
+
+  document.getElementById("contestants").addEventListener("click", async (event) => {
+    const diffModel = event.target.closest("[data-diff]")?.dataset.diff;
+    const applyModel = event.target.closest("[data-apply]")?.dataset.apply;
+    const startModel = event.target.closest("[data-start-lane]")?.dataset.startLane;
+    if (startModel) {
+      try {
+        await call("POST", `/api/arena/lanes/${startModel}/start`);
+        toast(`Starting ${startModel}'s lane. Its links appear when it is up.`);
+      } catch (error) { toast(error.message); }
+    }
+    if (diffModel) {
+      const text = await (await fetch(`/api/arena/runs/${currentRun.id}/patch/${diffModel}`)).text();
+      document.getElementById("diff-title").textContent = `${diffModel}: what it changed`;
+      document.getElementById("diff-body").innerHTML = text
+        ? text.split("\n").map((line) => `<span class="${line.startsWith("+++") || line.startsWith("---") || line.startsWith("@@") ? "meta" : line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : ""}">${esc(line) || " "}</span>`).join("\n")
+        : "No changes.";
+      document.getElementById("diff").showModal();
+    }
+    if (applyModel) {
+      if (!confirm(`Apply ${applyModel}'s change to the base app? Files it overwrites are backed up to .arena/backups/${currentRun.id}/${applyModel}/.`)) return;
+      try {
+        const { written } = await call("POST", `/api/arena/runs/${currentRun.id}/apply/${applyModel}`);
+        toast(`Applied ${applyModel}'s change: ${written.join(", ")}`);
+      } catch (error) { toast(error.message); }
+    }
+  });
+  document.getElementById("diff-close").addEventListener("click", () => document.getElementById("diff").close());
+
+  document.getElementById("race").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const freeText = (form.get("freeText") || "").trim();
+    const body = freeText ? { freeText } : { taskId: form.get("taskId") };
+    const label = freeText ? "your request" : tasks.find((t) => t.id === body.taskId)?.title;
+    if (!confirm(`Start a race on ${label}? Three agents run in parallel, each capped at $1 ($2 on the hardest task).`)) return;
+    try {
+      const { run } = await call("POST", "/api/arena/runs", body);
+      renderArena(run);
+      toast("Race started: booting three lanes");
+    } catch (error) { toast(error.message); }
+  });
+  loadTasks().catch((error) => toast(error.message));
+
+  const source = new EventSource("/api/events");
+  source.addEventListener("lanes", (event) => {
+    const data = JSON.parse(event.data);
+    render(data.lanes);
+    renderArena(data.arena ?? null);
+    const at = new Date(data.at);
+    document.getElementById("clock").innerHTML = `${at.toLocaleTimeString()}<small>last report from Flisk</small>`;
+  });
+  source.addEventListener("problem", (event) => toast(JSON.parse(event.data).message));
+  source.onerror = () => {
+    document.getElementById("clock").innerHTML = `<span class="conn-lost">offline</span><small>lost the dashboard server; retrying</small>`;
+  };
+</script>
+</body>
+</html>

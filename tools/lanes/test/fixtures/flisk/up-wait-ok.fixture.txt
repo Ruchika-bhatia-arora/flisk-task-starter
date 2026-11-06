@@ -1,0 +1,3 @@
+{"schemaVersion":1,"data":{"ok":true,"stack":null,"services":["db","redis","result","vote","worker"],"tiltUrl":"http://localhost:10350"},"errors":[]}
+{"schemaVersion":1,"data":{"ok":false},"errors":[{"code":"UP_FAILED","message":"flisk up exited before reporting a result"}]}
+{"schemaVersion":1,"data":{"ok":false},"errors":[{"code":"UP_FAILED","message":"flisk up --wait exited before reporting a result"}]}

@@ -1,0 +1,21 @@
+{
+  "$schema": "https://flisk.sh/schema.service.json",
+  "schemaVersion": 1,
+  "appName": "seed",
+  "appType": "bring-your-own",
+  "stack": "flisk-task-starter-main",
+  "port": 4002,
+  "buildContext": "../../../seed-data",
+  "dockerfile": "Dockerfile",
+  "exposeViaProxy": false,
+  "dependsOn": [
+    {
+      "name": "vote",
+      "condition": "service_healthy"
+    }
+  ],
+  "restart": "no",
+  "profiles": [
+    "seed"
+  ]
+}

@@ -1,0 +1,1 @@
+{"schemaVersion":1,"data":{"service":"db","runtime":"container","command":["psql","-U","postgres","-tAc","select vote, count(*) from votes group by vote"],"exitCode":0,"stdout":"a|1\n","stderr":""},"errors":[]}

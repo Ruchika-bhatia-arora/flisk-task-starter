@@ -1,0 +1,24 @@
+{
+  "$schema": "https://flisk.sh/schema.service.json",
+  "schemaVersion": 1,
+  "appName": "redis",
+  "appType": "bring-your-own",
+  "stack": "flisk-task-starter-main",
+  "port": 4001,
+  "healthCheck": {
+    "command": [
+      "sh",
+      "-c",
+      "/healthchecks/redis.sh"
+    ],
+    "interval": 5
+  },
+  "image": "redis:alpine",
+  "exposeViaProxy": false,
+  "volumes": [
+    {
+      "source": "../../../healthchecks",
+      "target": "/healthchecks"
+    }
+  ]
+}
